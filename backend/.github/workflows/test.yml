@@ -1,0 +1,38 @@
+name: Test
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Build
+        run: cd backend && go build ./...
+      - name: Test
+        run: cd backend && go test ./...
+      - name: Start server
+        run: |
+          cd backend
+          go run cmd/server/main.go &
+          sleep 5
+      - name: Health check
+        run: curl -f http://localhost:8080/healthz
+      - name: Load mock data
+        run: |
+          curl -X PUT http://localhost:8080/v1/matches/bayern-dortmund-2025-04-12 \
+            -H "Content-Type: application/json" \
+            -d @backend/examples/bayern-dortmund-2025.json
+      - name: Set current match
+        run: |
+          curl -X PUT http://localhost:8080/v1/matches/current \
+            -H "Content-Type: application/json" \
+            -d '{"matchId":"bayern-dortmund-2025-04-12"}'
+      - name: Test overlay
+        run: curl -f http://localhost:8080/v1/matches/current/overlay

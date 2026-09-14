@@ -1,0 +1,17 @@
+{
+  "id": "bayern-dortmund-2025-04-12",
+  "homeTeam": {
+    "name": "FC Bayern München",
+    "shortName": "Bayern",
+    "code": "FCB"
+  },
+  "awayTeam": {
+    "name": "Borussia Dortmund",
+    "shortName": "Dortmund",
+    "code": "BVB"
+  },
+  "homeScore": 2,
+  "awayScore": 2,
+  "minute": 78,
+  "status": "LIVE"
+}
