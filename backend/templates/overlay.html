@@ -339,7 +339,9 @@
     </div>
 
     <script>
-        const matchId = window.location.pathname.split('/')[3];
+        // Match-ID aus URL extrahieren (unterstützt /current und /{id})
+        const pathParts = window.location.pathname.split('/').filter(p => p);
+        const matchId = pathParts.length >= 3 ? pathParts[pathParts.length - 2] : 'current';
         let selectedPosition = '{{.Config.Position}}';
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -380,7 +382,12 @@
                 visibleFields: ['score', 'time', 'teams']
             };
 
-            fetch(`/v1/matches/${matchId}/config`, {
+            // URL für /current oder /{id} korrekt aufbauen
+            const configUrl = matchId === 'current' 
+                ? `/v1/matches/current/config`
+                : `/v1/matches/${matchId}/config`;
+
+            fetch(configUrl, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(config)
