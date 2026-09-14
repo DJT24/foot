@@ -62,9 +62,17 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCurrentMatches(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
-		s.getCurrentMatch(w, r)
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			s.getCurrentConfig(w, r)
+		} else {
+			s.getCurrentMatch(w, r)
+		}
 	case http.MethodPut:
-		s.setCurrentMatch(w, r)
+		if strings.HasSuffix(r.URL.Path, "/config") {
+			s.updateCurrentConfig(w, r)
+		} else {
+			s.setCurrentMatch(w, r)
+		}
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -157,4 +165,30 @@ func (s *Server) updateMatch(w http.ResponseWriter, r *http.Request, id string) 
 
 	s.matches[id] = &match
 	w.WriteHeader(http.StatusOK)
+}
+
+func (s *Server) getCurrentConfig(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	currentID := s.currentID
+	s.mu.RUnlock()
+
+	if currentID == "" {
+		http.Error(w, "No current match set", http.StatusNotFound)
+		return
+	}
+
+	s.getConfig(w, r, currentID)
+}
+
+func (s *Server) updateCurrentConfig(w http.ResponseWriter, r *http.Request) {
+	s.mu.RLock()
+	currentID := s.currentID
+	s.mu.RUnlock()
+
+	if currentID == "" {
+		http.Error(w, "No current match set", http.StatusNotFound)
+		return
+	}
+
+	s.updateConfig(w, r, currentID)
 }
