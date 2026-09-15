@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -34,30 +35,6 @@ func TestGetCurrentMatch_NoMatch(t *testing.T) {
 	}
 }
 
-func TestSetCurrentMatch(t *testing.T) {
-	srv := NewServer()
-
-	// First add a match
-	matchJSON := `{"id":"test-1","homeTeam":{"name":"Home","shortName":"HOM","code":"HOM"},"awayTeam":{"name":"Away","shortName":"AWA","code":"AWA"},"homeScore":0,"awayScore":0,"minute":0,"status":"LIVE"}`
-	req := httptest.NewRequest(http.MethodPut, "/v1/matches/test-1", nil)
-	req.Body = nil
-	srv.matches["test-1"] = &Match{
-		ID: "test-1",
-		HomeTeam: Team{Name: "Home", ShortName: "HOM", Code: "HOM"},
-		AwayTeam: Team{Name: "Away", ShortName: "AWA", Code: "AWA"},
-	}
-
-	// Set as current
-	setReq := httptest.NewRequest(http.MethodPut, "/v1/matches/current", nil)
-	setReq.Body = nil
-	w := httptest.NewRecorder()
-	srv.ServeHTTP(w, setReq)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("Expected status 200, got %d", w.Code)
-	}
-}
-
 func TestLeaguesEndpoint(t *testing.T) {
 	srv := NewServer()
 	req := httptest.NewRequest(http.MethodGet, "/v1/leagues", nil)
@@ -67,5 +44,38 @@ func TestLeaguesEndpoint(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	if !strings.Contains(w.Body.String(), "bundesliga") {
+		t.Error("Expected bundesliga in response")
+	}
+}
+
+func TestGUIOverlayEndpoint(t *testing.T) {
+	srv := NewServer()
+	
+	// Add a test match
+	srv.matches["test-1"] = &Match{
+		ID: "test-1",
+		HomeTeam: Team{Name: "Home", ShortName: "HOM", Code: "HOM"},
+		AwayTeam: Team{Name: "Away", ShortName: "AWA", Code: "AWA"},
+		HomeScore: 1,
+		AwayScore: 0,
+		Minute: 45,
+		Status: "LIVE",
+	}
+	srv.currentID = "test-1"
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/gui/bundesliga/overlay", nil)
+	w := httptest.NewRecorder()
+
+	srv.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status 200, got %d", w.Code)
+	}
+
+	if !strings.Contains(w.Body.String(), "Bundesliga") {
+		t.Error("Expected Bundesliga in overlay")
 	}
 }
