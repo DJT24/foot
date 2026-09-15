@@ -33,7 +33,6 @@ func NewServer() *Server {
 	s := &Server{
 		matches: make(map[string]*Match),
 	}
-	s.registerOverlayRoutes()
 	return s
 }
 
@@ -211,4 +210,26 @@ func (s *Server) updateCurrentConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.updateConfig(w, r, currentID)
+}
+
+func (s *Server) handleLeagues(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		leagues := getLeagueConfig("all")
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(leagues)
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleLeagueByID(w http.ResponseWriter, r *http.Request, leagueID string) {
+	league := getLeagueConfig(leagueID)
+	if league == nil {
+		http.Error(w, "League not found", http.StatusNotFound)
+		return
+	}
+	
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(league)
 }
