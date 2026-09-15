@@ -4,6 +4,7 @@ import (
 	"html/template"
 	"net/http"
 	"embed"
+	"github.com/DJT24/foot/backend/internal/model"
 )
 
 //go:embed templates/gui/*.html
@@ -12,12 +13,13 @@ var guiFS embed.FS
 var guiTemplates = make(map[string]*template.Template)
 
 func init() {
-	// Load GUI templates for each league
-	for leagueID := range []string{"bundesliga", "champions-league", "premier-league", "dfb-pokal"} {
-		tmpl, err := template.ParseFS(guiFS, "templates/gui/*.html")
-		if err == nil {
-			guiTemplates[leagueID] = tmpl
-		}
+	// Load GUI templates
+	tmpl, err := template.ParseFS(guiFS, "templates/gui/*.html")
+	if err == nil {
+		guiTemplates["bundesliga"] = tmpl
+		guiTemplates["champions-league"] = tmpl
+		guiTemplates["premier-league"] = tmpl
+		guiTemplates["dfb-pokal"] = tmpl
 	}
 }
 
