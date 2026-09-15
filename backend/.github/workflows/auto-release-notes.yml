@@ -1,0 +1,111 @@
+name: Auto Release Notes & Changelog
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  generate-release-notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Generate Release Notes
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: context.ref.replace('refs/tags/', '')
+            });
+            
+            const { data: commits } = await github.rest.repos.listCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.ref,
+              per_page: 100
+            });
+            
+            let releaseNotes = `## 🚀 Release ${release.tag_name}\n\n`;
+            releaseNotes += `📅 Released: ${new Date().toISOString().split('T')[0]}\n\n`;
+            releaseNotes += `### 🎯 Changes\n\n`;
+            
+            const features = [];
+            const fixes = [];
+            const others = [];
+            
+            commits.forEach(commit => {
+              const message = commit.commit.message.toLowerCase();
+              const sha = commit.sha.substring(0, 7);
+              
+              if (message.includes('feat') || message.includes('add')) {
+                features.push(`- ${commit.commit.message} (${sha})`);
+              } else if (message.includes('fix') || message.includes('bug')) {
+                fixes.push(`- ${commit.commit.message} (${sha})`);
+              } else {
+                others.push(`- ${commit.commit.message} (${sha})`);
+              }
+            });
+            
+            if (features.length > 0) {
+              releaseNotes += `### ✨ Features\n${features.join('\n')}\n\n`;
+            }
+            
+            if (fixes.length > 0) {
+              releaseNotes += `### 🐛 Bug Fixes\n${fixes.join('\n')}\n\n`;
+            }
+            
+            if (others.length > 0) {
+              releaseNotes += `### 📝 Other Changes\n${others.join('\n')}\n\n`;
+            }
+            
+            releaseNotes += `---\n*Generated automatically by autonomous CI/CD*`;
+            
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              body: releaseNotes
+            });
+            
+            console.log('Release notes updated!');
+
+  update-changelog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Update CHANGELOG.md
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const fs = require('fs');
+            
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            
+            let changelog = '# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n';
+            
+            releases.forEach(release => {
+              changelog += `## [${release.tag_name}](${release.html_url}) - ${new Date(release.published_at).toISOString().split('T')[0]}\n\n`;
+              changelog += `${release.body || 'No release notes available'}\n\n`;
+            });
+            
+            fs.writeFileSync('CHANGELOG.md', changelog);
+            
+            console.log('CHANGELOG.md updated!');
+      
+      - name: Commit Changelog
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: '🤖 Update CHANGELOG.md'
+          branch: main
+          file_pattern: CHANGELOG.md
