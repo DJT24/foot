@@ -1,0 +1,96 @@
+name: Auto-Label Issues & PRs
+on:
+  issues:
+    types: [opened, edited]
+  pull_request_target:
+    types: [opened, edited]
+
+jobs:
+  auto-label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const issue = context.payload.issue || context.payload.pull_request;
+            const isPR = !!context.payload.pull_request;
+            
+            const title = issue.title.toLowerCase();
+            const body = (issue.body || '').toLowerCase();
+            const content = title + ' ' + body;
+            
+            const labelsToAdd = [];
+            
+            // Auto-label based on content
+            if (content.includes('bug') || content.includes('fix') || content.includes('error')) {
+              labelsToAdd.push('bug');
+            }
+            if (content.includes('feature') || content.includes('enhancement')) {
+              labelsToAdd.push('enhancement');
+            }
+            if (content.includes('test') || content.includes('testing')) {
+              labelsToAdd.push('testing');
+            }
+            if (content.includes('doc') || content.includes('readme')) {
+              labelsToAdd.push('documentation');
+            }
+            if (content.includes('backend') || content.includes('api')) {
+              labelsToAdd.push('backend');
+            }
+            if (content.includes('android') || content.includes('mobile')) {
+              labelsToAdd.push('android');
+            }
+            if (content.includes('overlay') || content.includes('gui')) {
+              labelsToAdd.push('overlay');
+            }
+            if (content.includes('league') || content.includes('bundesliga') || content.includes('champions')) {
+              labelsToAdd.push('leagues');
+            }
+            
+            if (labelsToAdd.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: labelsToAdd
+              });
+              
+              console.log(`Added labels: ${labelsToAdd.join(', ')}`);
+            }
+
+  auto-assign:
+    runs-on: ubuntu-latest
+    if: github.event_name === 'issues' && github.event.action === 'opened'
+    steps:
+      - uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const issue = context.payload.issue;
+            
+            // Auto-assign based on labels
+            if (issue.labels.some(label => label.name === 'backend')) {
+              // Would assign specific user in real scenario
+              console.log('Backend issue - would assign backend team');
+            }
+            if (issue.labels.some(label => label.name === 'android')) {
+              console.log('Android issue - would assign mobile team');
+            }
+            
+            // Add welcome comment for first-time contributors
+            const { data: userIssues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              creator: issue.user.login,
+              state: 'all'
+            });
+            
+            if (userIssues.length === 1) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `👋 Welcome @${issue.user.login}! Thanks for your first contribution to this project. We'll review this soon!`
+              });
+            }
