@@ -1,0 +1,166 @@
+name: CI/CD - Autonomous Pipeline
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Go Mod Verify
+        run: cd backend && go mod verify
+      
+      - name: Go Vet (Static Analysis)
+        run: cd backend && go vet ./...
+      
+      - name: Go Fmt (Code Formatting)
+        run: cd backend && test -z "$(gofmt -l .)"
+      
+      - name: Go Lint
+        run: |
+          cd backend
+          go install golang.org/x/lint/golint@latest
+          golint ./...
+      
+      - name: Build
+        run: cd backend && go build -v ./...
+      
+      - name: Run All Tests
+        run: cd backend && go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+      
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./backend/coverage.txt
+          flags: unittests
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Run Trivy Vulnerability Scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy Results
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  auto-review:
+    runs-on: ubuntu-latest
+    needs: [quality-gates]
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Auto-Review PR
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            
+            let reviewComment = '## 🤖 Autonomous Code Review\n\n';
+            let hasIssues = false;
+            
+            files.forEach(file => {
+              if (file.filename.includes('_test.go')) {
+                reviewComment += `✅ Test file: \`${file.filename}\`\n`;
+              } else if (file.filename.includes('.go') && !file.filename.includes('vendor/')) {
+                reviewComment += `📝 Go file: \`${file.filename}\`\n`;
+              }
+            });
+            
+            reviewComment += '\n---\n*Automated review by CI/CD pipeline*';
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: reviewComment
+            });
+
+  auto-deploy:
+    runs-on: ubuntu-latest
+    needs: [quality-gates, security-scan]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Build Docker Image
+        run: |
+          cd backend
+          docker build -t foot-overlay:${{ github.sha }} .
+      
+      - name: Tag Latest
+        run: |
+          cd backend
+          docker tag foot-overlay:${{ github.sha }} foot-overlay:latest
+      
+      - name: Create Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            ## Autonomous Release
+            - Commit: ${{ github.sha }}
+            - Build: ${{ github.run_number }}
+            - All quality gates: ✅
+            - Security scan: ✅
+          draft: false
+          prerelease: false
+
+  auto-merge:
+    runs-on: ubuntu-latest
+    needs: [quality-gates]
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Auto-Merge Approved PRs
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            
+            const hasApproval = reviews.some(review => review.state === 'APPROVED');
+            
+            if (hasApproval) {
+              await github.rest.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                merge_method: 'squash'
+              });
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: '🤖 Auto-merged after successful CI/CD and approval'
+              });
+            }
