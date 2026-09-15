@@ -46,11 +46,31 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// League endpoints
+	if strings.HasPrefix(path, "/v1/leagues") {
+		if path == "/v1/leagues" {
+			s.handleLeagues(w, r)
+		} else {
+			leagueID := strings.TrimPrefix(path, "/v1/leagues/")
+			s.handleLeagueByID(w, r, leagueID)
+		}
+		return
+	}
+
+	// GUI endpoints
+	if strings.HasPrefix(path, "/v1/gui/") {
+		leagueID := strings.TrimPrefix(path, "/v1/gui/")
+		s.handleGUIOverlay(w, r, leagueID)
+		return
+	}
+
+	// Current match endpoints
 	if strings.HasPrefix(path, "/v1/matches/current") {
 		s.handleCurrentMatches(w, r)
 		return
 	}
 
+	// Match by ID endpoints
 	if strings.HasPrefix(path, "/v1/matches/") {
 		s.handleMatchesByID(w, r)
 		return
