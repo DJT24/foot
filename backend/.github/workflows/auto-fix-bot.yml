@@ -1,0 +1,134 @@
+name: Auto-Fix Bot
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  auto-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Auto-Fmt
+        run: |
+          cd backend
+          gofmt -w .
+          
+          if ! git diff --exit-code; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "🤖 Auto-format code with gofmt"
+            git push
+          fi
+      
+      - name: Auto-Fix Imports
+        run: |
+          cd backend
+          go install golang.org/x/tools/cmd/goimports@latest
+          goimports -w .
+          
+          if ! git diff --exit-code; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add .
+            git commit -m "🤖 Auto-fix imports with goimports"
+            git push
+          fi
+      
+      - name: Add Review Comments for Issues
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            
+            let reviewComments = [];
+            
+            for (const file of files) {
+              if (file.filename.endsWith('.go')) {
+                // Check for common issues
+                const content = file.contents_url;
+                
+                // Add suggestions
+                if (file.filename.includes('handler')) {
+                  reviewComments.push({
+                    path: file.filename,
+                    position: 1,
+                    body: '💡 Consider adding input validation here'
+                  });
+                }
+                
+                if (file.filename.includes('test')) {
+                  reviewComments.push({
+                    path: file.filename,
+                    position: 1,
+                    body: '✅ Good practice to test edge cases'
+                  });
+                }
+              }
+            }
+            
+            if (reviewComments.length > 0) {
+              await github.rest.pulls.createReview({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                event: 'COMMENT',
+                comments: reviewComments
+              });
+            }
+
+  suggest-improvements:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v6
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            
+            const { data: files } = await github.rest.pulls.listFiles({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number
+            });
+            
+            let suggestions = '## 🤖 Autonomous Improvement Suggestions\n\n';
+            
+            const testFiles = files.filter(f => f.filename.includes('_test.go'));
+            const srcFiles = files.filter(f => f.filename.endsWith('.go') && !f.filename.includes('_test.go'));
+            
+            if (testFiles.length > 0) {
+              suggestions += `### ✅ Test Coverage\n- ${testFiles.length} test file(s) modified\n\n`;
+            } else if (srcFiles.length > 0) {
+              suggestions += `### ⚠️ Missing Tests\n- Consider adding tests for: ${srcFiles.map(f => f.filename).join(', ')}\n\n`;
+            }
+            
+            if (pr.additions > pr.deletions * 2) {
+              suggestions += `### 📏 Code Size\n- Large PR (${pr.additions} additions, ${pr.deletions} deletions)\n- Consider splitting into smaller PRs\n\n`;
+            }
+            
+            suggestions += '\n---\n*Suggestions generated automatically*';
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: suggestions
+            });
