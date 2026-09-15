@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+{{define "gui.html"}}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -116,7 +116,7 @@
             
             <div class="teams">
                 <div class="team">
-                    <img src="" alt="{{.Match.HomeTeam.ShortName}}" class="team-logo">
+                    <div class="team-logo"></div>
                     <div class="team-name">{{.Match.HomeTeam.ShortName}}</div>
                 </div>
                 
@@ -125,7 +125,7 @@
                 </div>
                 
                 <div class="team">
-                    <img src="" alt="{{.Match.AwayTeam.ShortName}}" class="team-logo">
+                    <div class="team-logo"></div>
                     <div class="team-name">{{.Match.AwayTeam.ShortName}}</div>
                 </div>
             </div>
@@ -138,4 +138,4 @@
         setInterval(() => location.reload(), 10000);
     </script>
 </body>
-</html>
+</html>{{end}}
